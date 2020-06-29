@@ -17,8 +17,8 @@ use crate::css::embed_css;
 use crate::js::attr_is_event_handler;
 use crate::opts::Options;
 use crate::url::{
-    data_to_data_url, get_url_fragment, is_http_url, resolve_url, url_has_protocol,
-    url_with_fragment,
+    data_to_data_url, get_url_fragment, is_data_url, is_file_url, is_http_url, resolve_url,
+    url_has_scheme, url_with_fragment,
 };
 use crate::utils::retrieve_asset;
 
@@ -761,13 +761,72 @@ pub fn walk_and_embed_assets(
                             }
 
                             // Don't touch email links or hrefs which begin with a hash sign
-                            if attr_value.starts_with('#') || url_has_protocol(attr_value) {
+                            if attr_value.starts_with('#')
+                                || (!is_http_url(attr_value)
+                                    && !is_file_url(attr_value)
+                                    && !is_data_url(attr_value)
+                                    && url_has_scheme(attr_value))
+                            {
                                 continue;
                             }
 
                             let href_full_url = resolve_url(&url, attr_value).unwrap_or_default();
+                            let href_url_fragment = get_url_fragment(href_full_url.clone());
+
                             attr.value.clear();
-                            attr.value.push_slice(href_full_url.as_str());
+                            if depth < options.max_depth && href_full_url != url {
+                                let media_type2;
+                                let base_url2;
+                                let dom2;
+
+                                match retrieve_asset(
+                                    cache,
+                                    &client,
+                                    url,
+                                    &href_full_url,
+                                    options.silent,
+                                    depth + 1,
+                                ) {
+                                    Ok((data, final_url, media_type)) => {
+                                        base_url2 = final_url;
+                                        dom2 = html_to_dom(&String::from_utf8_lossy(&data));
+                                        media_type2 = media_type;
+
+                                        // Embed remote assets
+                                        walk_and_embed_assets(
+                                            cache,
+                                            &client,
+                                            base_url2.as_str(),
+                                            &dom2.document,
+                                            &options,
+                                            depth + 1,
+                                        );
+
+                                        // Serialize DOM tree
+                                        let result: String =
+                                            stringify_document(&dom2.document, &options);
+
+                                        // TODO potentially add CSP and META tags
+
+                                        let res = data_to_data_url(
+                                            media_type2.as_str(),
+                                            result.as_bytes(),
+                                            base_url2.as_str(),
+                                        );
+
+                                        // TODO #fragment
+                                        attr.value.push_slice(res.as_str());
+                                    }
+                                    Err(_) => {
+                                        eprintln!("Could not retrieve target document");
+                                        // TODO #fragment
+                                        attr.value.push_slice(href_full_url.as_str());
+                                    }
+                                }
+                            } else {
+                                // TODO #fragment
+                                attr.value.push_slice(href_full_url.as_str());
+                            }
                         }
                     }
                 }
@@ -891,7 +950,7 @@ pub fn walk_and_embed_assets(
                                 &url,
                                 &frame_full_url,
                                 options.silent,
-                                depth + 1,
+                                depth,
                             ) {
                                 Ok((frame_data, frame_final_url, frame_media_type)) => {
                                     let frame_dom =
@@ -902,7 +961,7 @@ pub fn walk_and_embed_assets(
                                         &frame_final_url,
                                         &frame_dom.document,
                                         &options,
-                                        depth + 1,
+                                        depth,
                                     );
                                     let mut frame_data: Vec<u8> = Vec::new();
                                     serialize(

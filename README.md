@@ -52,6 +52,7 @@ The guide can be found [here](docs/containers.md)
 
 ## Options
  - `-c`: Ignore styles
+ - `-d`: Specify maximum depth to follow links
  - `-f`: Exclude frames
  - `-F`: Omit web fonts
  - `-i`: Remove images

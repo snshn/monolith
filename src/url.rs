@@ -150,7 +150,7 @@ pub fn resolve_url<T: AsRef<str>, U: AsRef<str>>(from: T, to: U) -> Result<Strin
     Ok(result)
 }
 
-pub fn url_has_protocol<T: AsRef<str>>(url: T) -> bool {
+pub fn url_has_scheme<T: AsRef<str>>(url: T) -> bool {
     Url::parse(url.as_ref())
         .and_then(|u| Ok(u.scheme().len() > 0))
         .unwrap_or(false)

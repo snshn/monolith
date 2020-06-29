@@ -8,5 +8,5 @@ mod is_data_url;
 mod is_file_url;
 mod is_http_url;
 mod resolve_url;
-mod url_has_protocol;
+mod url_has_scheme;
 mod url_with_fragment;
